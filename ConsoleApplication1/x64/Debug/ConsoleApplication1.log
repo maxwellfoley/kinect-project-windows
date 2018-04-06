@@ -1,0 +1,18 @@
+﻿  stdafx.cpp
+  ConsoleApplication1.cpp
+c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\consoleapplication1.cpp(7): warning C4005: '_CRT_SECURE_NO_WARNINGS': macro redefinition
+  c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\consoleapplication1.cpp(7): note: command-line arguments:  see previous definition of '_CRT_SECURE_NO_WARNINGS'
+c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\consoleapplication1.cpp(7): warning C4603: '_CRT_SECURE_NO_WARNINGS': macro is not defined or definition is different after precompiled header use
+  c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\consoleapplication1.cpp(7): note: Add macro to precompiled header instead of defining here
+  c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\consoleapplication1.cpp(9): note: use of precompiled header
+c:\users\maxwell\documents\websocketpp-master\websocketpp-master\websocketpp\frame.hpp(831): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+  Info: Boost.Config is older than your compiler version - probably nothing bad will happen - but you may wish to look for an update Boost version.  Define BOOST_CONFIG_SUPPRESS_OUTDATED_MESSAGE to suppress this message.
+c:\users\maxwell\documents\websocketpp-master\websocketpp-master\websocketpp\common\md5.hpp(367): warning C4267: '+=': conversion from 'size_t' to 'websocketpp::md5::md5_word_t', possible loss of data
+c:\users\maxwell\documents\websocketpp-master\websocketpp-master\websocketpp\sha1\sha1.hpp(176): warning C4267: '=': conversion from 'size_t' to 'unsigned int', possible loss of data
+c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\kinect_stuff.h(99): warning C4305: 'initializing': truncation from 'double' to 'float'
+c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\kinect_stuff.h(100): warning C4305: 'initializing': truncation from 'double' to 'float'
+c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\kinect_stuff.h(101): warning C4305: 'initializing': truncation from 'double' to 'float'
+c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\kinect_stuff.h(102): warning C4305: 'initializing': truncation from 'double' to 'float'
+c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\kinect_stuff.h(108): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+c:\users\maxwell\documents\kinect-project-windows\consoleapplication1\kinect_stuff.h(109): warning C4244: 'initializing': conversion from 'float' to 'int', possible loss of data
+  ConsoleApplication1.vcxproj -> C:\Users\Maxwell\Documents\kinect-project-windows\x64\Debug\ConsoleApplication1.exe

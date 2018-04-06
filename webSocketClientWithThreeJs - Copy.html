@@ -1,0 +1,454 @@
+<html>
+<head>
+	<title>WebSocket client example</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<script src="http://fargo.io/code/jquery-1.9.1.min.js"></script>
+	<script src="three.js"></script>
+	<script src="perlin.js"></script>
+
+	<link href="http://fargo.io/code/ubuntuFont.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+	<!-- render kinect data into html5 canvas-->
+	<div style="position:absolute;z-index:-1">
+		<canvas id="basicCanvas" width="632" height="480"></canvas>
+		<div id="energyMeter">none</div>
+	</div>
+<script type="x-shader/x-vertex" id="vertexShader">
+varying vec2 vUv;
+varying vec4 myPosition;
+
+void main() {
+	vUv = uv;
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+	myPosition = gl_Position;
+}
+</script>
+
+<script type="x-shader/x-fragment" id="fragmentShader">
+varying vec2 vUv;
+varying vec4 myPosition;
+
+uniform float time;
+uniform vec2 resolution;
+uniform vec3 fireflies[100];
+uniform sampler2D texture1;
+
+void main() {
+	vec2 position = (myPosition.xy+vec2(1.)) * resolution;
+	float color = 0.0;
+	for(int i = 0; i < 100; i++)
+	{
+		if(fireflies[i].z!=-66.)
+		{
+			color = max(color,(1.-smoothstep(0.,fireflies[i].z,distance(vec2(fireflies[i].x,fireflies[i].y),position))));
+		//color+= (1.-distance(vec2(0.,0.),position));
+		}
+	}
+	//color = 100.-distance(vec2(100.100),position);
+	//color = max(color,100.-distance(vec2(200.200),position));
+	gl_FragColor = vec4(color,0.,0.,color);
+}
+
+</script>
+
+<script>
+noise.seed(Math.random());
+var geometry;
+var urlMySocket = "ws://localhost:9000/";
+var ctSeconds = 0;
+var myDepth = [];
+var skeleton = [];
+var pixelArray = [];
+var info1 = [];
+var info4 = [];
+var info16 = [];
+var info32 = [];
+var info64 = [];
+var infoWhole = [];
+var overallEnergy = 0; //try to get this to a value between 0 and 100
+
+function secondsSince (when) {
+	var now = new Date ();
+	when = new Date (when);
+	return ((now - when) / 1000);
+}
+function callSocket (s, callback) {
+	var whenstart = new Date ();
+	var mySocket = new WebSocket (urlMySocket);
+	mySocket.onopen = function (evt) {
+		mySocket.send (s);
+	};
+	mySocket.onmessage = function (evt) {
+		$("#idWebSocketTime").text ("The call to the server took " + secondsSince (whenstart) + " secs.");
+		callback (evt.data);
+		mySocket.close ();
+	};
+}
+function everySecond () {
+	callSocket ("WebSocket test #" + ctSeconds++, function (s) {
+		var reader = new FileReader();
+		reader.addEventListener("loadend", function() {
+			myDepth = JSON.parse(reader.result);
+			updateData(myDepth);
+			createImage(myDepth);
+			createFireflies();
+		});
+		reader.readAsText(s);
+		$("#idWebSocketResult").text (s);
+
+	});
+}
+
+function firefly(x,y)
+{
+	var obj = {}
+	obj.x =x;
+	obj.y = y;
+	obj.size = 100;
+	obj.energy = 100;
+	obj.update = function() {
+		this.x += noise.simplex2((counter+this.x)/100,0);
+		this.y += noise.simplex2((counter+this.y)/100,0);
+		this.size--;
+		this.energy--;
+	};
+
+	return obj;
+}
+var fireflies = [];
+var firefliesVec = [];
+
+function createFireflies() {
+
+	for(var i = 0; i < info64.length; i++)
+	{
+			for(var j = 0; j < info64[i].length; j++)
+			{
+				if(info64[i][j].depth>10)
+				{
+					fireflies.push(firefly(i*(window.innerWidth/info64[i].length), j*window.innerHeight/info64.length));
+				}
+			}
+	}
+	if(fireflies.length > 100) {
+		fireflies = fireflies.slice(fireflies.length-100);
+	}
+
+	firefliesVec = [];
+	for(var i = 0; i < 100; i++)
+	{
+		if(fireflies[i])
+		{
+			fireflies[i].update();
+			firefliesVec.push(new THREE.Vector3(fireflies[i].x, fireflies[i].y, fireflies[i].size));
+		}
+		else {
+			firefliesVec.push(new THREE.Vector3(-1000, -1000, -66));
+		}
+	}
+	uniforms.fireflies.value = firefliesVec;
+
+}
+function createImage(depth,skeleton){
+	//120 x 158 array
+	//this flattens out the array
+	//depth = [].concat.apply([], depth);
+	var canvas = document.getElementById('basicCanvas');
+	var ctx = canvas.getContext('2d');
+
+	var width = 632;
+	var height = 480;
+
+	var myImageData = ctx.createImageData(632, 480);
+	var data = myImageData.data;
+	//console.log("data.length", data.length);
+	var pixelsLength = Math.floor(data.length/4);
+
+	for (var i = 0; i < pixelsLength; i += 1) {
+	//	var y = Math.floor((i/width)/4);
+	//	var x = Math.floor((i%width)/4);
+
+	//	if(!depth[y]){ console.log("DEPTH Y IS NULL", y,i);
+
+		data[i*4]     = 0;//info1[y][x].volatilityAvg60;//*255/2048;     // red
+		data[i*4 + 1] = 100;//info1[y][x].volatilityAvg60;//*255/2048; // green
+		data[i*4 + 2] = 0;//info1[y][x].volatilityAvg60;//*;;255/2048; // blue
+		data[i*4 + 3] = 255;//-depth[y][x]*255/2048; // alpha
+	}
+
+	myImageData.data = data;
+	//console.log("data2",data)
+	ctx.putImageData(myImageData, 0, 0);
+	//draw skeleton data on there in circles
+
+	//ctx.beginPath();
+//	ctx.arc(100, 100,100,0,2*Math.PI,false);
+///	ctx.fillStyle = "red";
+//	ctx.fill();
+
+	for(var i = 0; i < skeleton.length; i++){
+		if(skeleton[i].w == 1){
+			console.log("w equals one",skeleton[i]);
+			ctx.beginPath();
+			ctx.arc(skeleton[i].x, skeleton[i].y,10,0,2*Math.PI,false);
+			ctx.fillStyle = "red";
+			ctx.fill();
+		}
+	}
+}
+
+
+function initializeArray(arr,x,y)
+{
+	for(var i = 0; i < y; i++)
+	{
+		var infoArr = []
+		for(var j = 0; j < x; j++)
+		{
+			var infoCell = {depth:0,depthAvg60:0,depthAvg600:0,prevDepth:0,volatility:0,volatilityAvg60:0,volatilityAvg600:0};
+			infoArr.push(infoCell);
+		}
+		arr.push(infoArr);
+	}
+
+	return arr;
+}
+function createData(){
+console.log("in create data");
+	initializeArray(info1,160,120);
+	initializeArray(info4,40,30);
+	initializeArray(info16,20,15);
+	initializeArray(info32,10,8);
+	initializeArray(info64,5,4);
+	initializeArray(infoWhole,1,1);
+}
+
+function calculateFromDepth(info)
+{
+	for(var i = 0; i < info.length; i++)
+	{
+		for(var j = 0; j < info[i].length; j++)
+		{
+
+			info[i][j].depthAvg60 = info[i][j].depth/60 + info[i][j].depthAvg60*(59/60);
+			info[i][j].depthAvg600 = info[i][j].depth/600 + info[i][j].depthAvg600*(599/600);
+
+			info[i][j].volatility = info[i][j].depth - info[i][j].prevDepth;
+			info[i][j].volatilityAvg60 = info[i][j].volatility/60 + info[i][j].volatilityAvg60*(59/60);
+			info[i][j].volatilityAvg600 = info[i][j].volatility/600 + info[i][j].volatilityAvg600*(599/600);
+			info1[i][j].prevDepth = info1[i][j].depth;
+
+		}
+	}
+}
+
+
+//this is still not working. in between info4 and info16 it breaks
+function averageDepthData(bigger,smaller,x,y)
+{
+	for(var i = 0; i < smaller.length; i++)
+	{
+		for(var j = 0; j < smaller[i].length; j++)
+		{
+			var depth = 0;
+
+			for(var i2 = i*y; i2 < (i+1)*y && i2 < bigger.length; i2++)
+			{
+				for(var j2 = j*x; j2 < (j+1)*x && j2 < bigger[i].length; j2++)
+				{
+					depth+= bigger[i2][j2].depth/(x*y);
+				}
+			}
+			smaller[i][j].depth = depth;
+		}
+	}
+
+}
+
+function updateData(depth) {
+
+	//120 x 158 array
+	for(var i = 0; i < info1.length; i++)
+	{
+		for(var j = 0; j < info1[i].length; j++)
+		{
+			info1[i][j].depth = depth[i][j];
+		}
+	}
+	calculateFromDepth(info1);
+
+	averageDepthData(info1,info4,4,4);
+	calculateFromDepth(info4);
+
+
+	averageDepthData(info4,info16,4,4);
+	calculateFromDepth(info16);
+
+	averageDepthData(info16,info32,2,2);
+	calculateFromDepth(info32);
+
+
+	averageDepthData(info32,info64,2,2);
+	calculateFromDepth(info64);
+
+	averageDepthData(info64,infoWhole,4,5);
+	calculateFromDepth(infoWhole);
+
+	overallEnergy = (infoWhole[0][0].volatilityAvg60 - .19) * 1000;
+
+	$('#energyMeter').text(overallEnergy);
+}
+var skeletonDataProcessed;
+function updateSkeletonData(skeletonData){
+	//MAXTODO: consider the architecture of this program.... passing in this parameter that mirrors a global item to edit that same globalitem? idk
+	skeletonDataProcessed = [];
+	minX = -2.2;
+	maxX = 2.2;
+	minY = -1.6
+	maxY = 1.6;
+	minZ = 0.0;
+	maxZ = 4.0;
+
+	for(var i = 0; i < skeletonData.length; i++)
+	{
+		var x = (skeletonData[i][0]-minX)*(maxX-minX);
+		var y = (skeletonData[i][1]-minY)*(maxY-minY);
+		var z = (skeletonData[i][2]-minZ)*(maxZ-minZ);
+
+		var v4 = new THREE.Vector4(x,y,z,skeletonData[i][3]);
+	//	console.log("v4",skeletonData[i],v4);
+		skeletonDataProcessed.push(v4);
+	}
+}
+
+function startup () {
+	createData();
+	createFireflies();
+	console.log ("startup");
+	//self.setInterval (everySecond, 30);
+//	console.log (THREE.Vector2(0,0),"v4v4v4v4v4");
+	//self.setInterval (everySecond, 1000);
+	var mySocket = new WebSocket (urlMySocket);
+
+	mySocket.onopen = function (evt) {
+		console.log("opened socket");
+	};
+
+	mySocket.onmessage = function (evt) {
+		var data = JSON.parse(evt.data);
+		console.log("recieved message", data);
+		skeleton = data.skeleton;
+		updateSkeletonData(skeleton);
+		createImage(myDepth, skeletonDataProcessed);
+
+		/*
+		var data = JSON.parse(evt.data);
+		myDepth = data.depth;
+		skeleton = data.skeleton;
+		updateData(myDepth);
+		createFireflies();*/
+	};
+
+	init();
+	animate();
+}
+
+var scene, camera, renderer, clock;
+var startTime = Date.now();
+var mouse = new THREE.Vector2();
+var initialZoom;
+var bufferScene; //= new THREE.Scene();
+var bufferTextureA;
+var bufferTextureB;
+var uniforms =
+ {time: {type:"f", value: 1.0 },
+	resolution: {type:"v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight)},
+	fireflies: {type:"v3v", value: firefliesVec},
+	texture1: { type: 't', value: bufferTextureA}
+};
+
+var counter = 1.0;
+var group;
+var mouseDown= false;
+var planeMesh2;
+function clamp(value, min, max) {
+	return Math.min(Math.max(value, min), max);
+}
+// Globals from the previous step go here...
+// Sets up the scene.
+function init() {
+	// Create the scene and set the scene size.
+	scene = new THREE.Scene();
+	var WIDTH = window.innerWidth,
+	HEIGHT = window.innerHeight;
+	var ambient = new THREE.AmbientLight( 0xffffff, 200. );
+	// Create a renderer and add it to the DOM.
+	renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+	renderer.setSize(WIDTH, HEIGHT);
+	renderer.setClearColor( 0x000000, 0);
+	document.body.appendChild(renderer.domElement);
+
+
+	// Set the background color of the scene.
+	// Create a camera, zoom it out from the model a bit, and add it to the scene.
+	var border = 0;
+	camera = new THREE.OrthographicCamera( WIDTH / - 2 - border, WIDTH / 2 + border, HEIGHT / 2 + border, HEIGHT / - 2 - border, -4000, 4000 );
+	camera.position.z = 10;
+	console.log("WORLD DIRECTION ", camera.getWorldDirection());
+	scene.add(camera);
+	initialZoom=camera.zoom;
+	scene.add(new THREE.AmbientLight(0xffffff));
+
+	// Create an event listener that resizes the renderer with the browser window.
+	window.addEventListener('resize', function() {
+		var WIDTH = window.innerWidth,
+		HEIGHT = window.innerHeight;
+		renderer.setSize(WIDTH, HEIGHT);
+		camera.aspect = WIDTH / HEIGHT;
+		camera.updateProjectionMatrix();
+	});
+	var material = new THREE.ShaderMaterial( {
+		uniforms: uniforms,
+ 		vertexShader: document.getElementById( 'vertexShader' ).textContent,
+		fragmentShader: document.getElementById( 'fragmentShader' ).textContent
+	});
+
+	material.side = THREE.DoubleSide;
+
+	geometry = new THREE.PlaneGeometry( window.innerWidth, window.innerHeight );
+	var material2 = new THREE.MeshBasicMaterial( {color: 0x00ff00} );
+
+	var mesh = new THREE.Mesh(geometry, material);
+	mesh.position.z = -10;
+	scene.add(mesh);
+}
+function animate() {
+	var swap = bufferTextureA;
+	bufferTextureA = bufferTextureB;
+	bufferTextureB = swap;
+
+	// Read more about requestAnimationFrame at http://www.paulirish.com/2011/requestanimationframe-for-smart-animating/
+	requestAnimationFrame(animate);
+	counter++;
+	uniforms.time.value = counter;
+	uniforms.resolution.value = new THREE.Vector2(window.innerWidth,window.innerHeight);
+  uniforms.texture1.value = bufferTextureA;
+
+	// Render the scene.
+	render();
+}
+function render() {
+	renderer.render( scene, camera );
+}
+// ]]>
+
+
+$(window).load (function () {
+	startup ();
+});
+
+</script>
+</body>
+</html>

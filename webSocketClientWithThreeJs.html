@@ -1,0 +1,360 @@
+<!--TODO: put on git, requires putting the proper ssh keys on windows-->
+<!--TODO: use base64 not JSON-->
+<!--TODO: make things streaky and trippy in the shader-->
+<!--TODO:  put velocity and variance info into the data passed to client-->
+<!--TODO:  trippy effects based on said data-->
+<!--TODO: use depth data to generate what seems like "randomness" so there is stuff going on outside of skeleton positi on-->
+<!--TODO:  put rigged mesh in here too-->
+<!--TODO:  use gpufluid to do similar things-->
+
+<html>
+<head>
+	<title>WebSocket client example</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<script src="http://fargo.io/code/jquery-1.9.1.min.js"></script>
+	<script src="three.js"></script>
+	<script src="perlin.js"></script>
+
+	<link href="http://fargo.io/code/ubuntuFont.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+	<!-- render kinect data into html5 canvas-->
+	<div style="position:absolute;z-index:-1">
+		<canvas id="basicCanvas" width="632" height="480"></canvas>
+		<div id="energyMeter">none</div>
+	</div>
+<script type="x-shader/x-vertex" id="vertexShader">
+varying vec2 vUv;
+varying vec4 myPosition;
+
+void main() {
+	vUv = uv;
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+	myPosition = gl_Position;
+}
+</script>
+
+<script type="x-shader/x-fragment" id="fragmentShader">
+varying vec2 vUv;
+varying vec4 myPosition;
+
+uniform ivec4 data0;
+uniform ivec4 data1;
+uniform ivec4 data2;
+uniform ivec4 data3;
+
+uniform float time;
+uniform vec2 resolution;
+uniform sampler2D texture1;
+
+float circle(vec2 pos, vec2 c, float r){
+  vec2 dist = pos-c;
+	return 1.-smoothstep(r-(r*0.01),
+                         r+(r*0.01),
+                         length(dist));
+}
+
+float myMod(int a, int b){
+	return float(a - (a/b)*b);
+}
+
+float map(float value,float min1,float max1,float min2, float max2)
+{
+	// Convert the current value to a percentage
+	// 0% - min1, 100% - max1
+	float perc = (value - min1) / (max1 - min1);
+	// Do the same operation backwards with min2 and max2
+	float result = perc * (max2 - min2) + min2;
+	return result;
+}
+void main() {
+	vec2 p = (myPosition.xy+vec2(1.))/2.0 * resolution;
+
+	float headX = map(float(data0.x / 256),0.0,256.0,0.0,resolution.x);
+	float headY = map(myMod(data0.x,256),0.0,256.0,0.0,resolution.y);
+	float spineX = map(float(data0.y) / 256.0,0.0,256.0,0.0,resolution.x);
+	float spineY = map(myMod(data0.y,256),0.0,256.0,0.0,resolution.y);
+	float elbowLX = map(float(data0.z)/ 256.0,0.0,256.0,0.0,resolution.x);
+	float elbowLY = map(myMod(data0.z,256),0.0,256.0,0.0,resolution.y);
+////	float elbowRX = map(float(data0.w)/ 256.0,0.0,256.0,0.0,resolution.x);
+//	float elbowRY = map(myMod(data0.w,256),0.0,256.0,0.0,resolution.y);
+	float shouldersX = map(float(data1.x)/ 256.0,0.0,256.0,0.0,resolution.x);
+	float shouldersY = map(myMod(data1.x,256),0.0,256.0,0.0,resolution.y);
+	float hipsX = map(float(data1.y)/ 256.0,0.0,256.0,0.0,resolution.x);
+	float hipsY = map(myMod(data1.y,256),0.0,256.0,0.0,resolution.y);
+	float kneeLX = map(float(data1.z)/ 256.0,0.0,256.0,0.0,resolution.x);
+	float kneeLY = map(myMod(data1.z,256),0.0,256.0,0.0,resolution.y);
+//	float kneeRX = map(float(data1.w)/ 256.0,0.0,256.0,0.0,resolution.x);
+//	float kneeRY = map(myMod(data1.w,256),0.0,256.0,0.0,resolution.y);
+	float handLX = map(float(data2.x)/ 256.0,0.0,256.0,0.0,resolution.x);
+	float handLY = map(myMod(data2.x,256),0.0,256.0,0.0,resolution.y);
+	float handRX = map(float(data2.y)/ 256.0,0.0,256.0,0.0,resolution.x);
+	float handRY = map(myMod(data2.y,256),0.0,256.0,0.0,resolution.y);
+	float footLX = map(float(data2.z)/256.0,0.0,256.0,0.0,resolution.x);
+	float footLY = map(myMod(data2.z,256),0.0,256.0,0.0,resolution.y);
+//	float footRX = map(float(data2.w)/256.0,0.0,256.0,0.0,resolution.x);
+//	float footRY = map(myMod(data2.w,256),0.0,256.0,0.0,resolution.y);
+
+	float color = circle(p,vec2(float(headX),float(headY)),20.0);
+	color = max(color, circle(p,vec2(float(spineX),float(spineY)),20.0));
+	color = max(color, circle(p,vec2(float(elbowLX),float(elbowLY)),20.0));
+	//color = max(color, circle(p,vec2(float(elbowRX),float(elbowRY)),20.0));
+	color = max(color, circle(p,vec2(float(shouldersX),float(shouldersY)),20.0));
+	color = max(color, circle(p,vec2(float(hipsX),float(hipsY)),20.0));
+	color = max(color, circle(p,vec2(float(kneeLX),float(kneeLY)),20.0));
+	//color = max(color, circle(p,vec2(float(kneeRX),float(kneeRY)),20.0));
+	color = max(color, circle(p,vec2(float(handLX),float(handLY)),20.0));
+	color = max(color, circle(p,vec2(float(handRX),float(handRY)),20.0));
+	color = max(color, circle(p,vec2(float(footLX),float(footLY)),20.0));
+	//color = max(color, circle(p,vec2(float(footRX),float(footRY)),20.0));
+color =max(color, circle(p,vec2(myMod(int(time),int(resolution.x)),10.0),10.0));
+
+//	color = circle(p,vec2(128.0,128.0),50.0);
+
+	//gl_FragColor = vec4(float(headX)/256.0,float(headY)/256.0,float(spineX)/256.0,1.0);
+//headX = 496
+	float b;
+	if(p.x > resolution.x) { b == 1.0;} else {b == 0.0;}
+	b = myMod(int(p.x),int(resolution.x));
+	gl_FragColor = vec4(color,sin(time/60.0),b,1.0);
+}
+
+</script>
+
+<script>
+noise.seed(Math.random());
+var geometry;
+var urlMySocket = "ws://localhost:9000/";
+var ctSeconds = 0;
+var myDepth = [];
+var skeleton = [];
+var pixelArray = [];
+var info1 = [];
+var info4 = [];
+var info16 = [];
+var info32 = [];
+var info64 = [];
+var infoWhole = [];
+var overallEnergy = 0; //try to get this to a value between 0 and 100
+
+function secondsSince (when) {
+	var now = new Date ();
+	when = new Date (when);
+	return ((now - when) / 1000);
+}
+function callSocket (s, callback) {
+	var whenstart = new Date ();
+	var mySocket = new WebSocket (urlMySocket);
+	mySocket.onopen = function (evt) {
+		mySocket.send (s);
+	};
+	mySocket.onmessage = function (evt) {
+		$("#idWebSocketTime").text ("The call to the server took " + secondsSince (whenstart) + " secs.");
+		callback (evt.data);
+		mySocket.close ();
+	};
+}
+function everySecond () {
+	callSocket ("WebSocket test #" + ctSeconds++, function (s) {
+		var reader = new FileReader();
+		reader.addEventListener("loadend", function() {
+			myDepth = JSON.parse(reader.result);
+			updateData(myDepth);
+			createImage(myDepth);
+			createFireflies();
+		});
+		reader.readAsText(s);
+		$("#idWebSocketResult").text (s);
+
+	});
+}
+
+function createImage(depth,skeleton,counter){
+	//120 x 158 array
+	//this flattens out the array
+	//depth = [].concat.apply([], depth);
+	var canvas = document.getElementById('basicCanvas');
+	var ctx = canvas.getContext('2d');
+
+	var width = 632;
+	var height = 480;
+
+	var myImageData = ctx.createImageData(632, 480);
+	var data = myImageData.data;
+	//console.log("data.length", data.length);
+	var pixelsLength = Math.floor(data.length/4);
+
+	for (var i = 0; i < pixelsLength; i += 1) {
+		data[i*4]     = 0;//info1[y][x].volatilityAvg60;//*255/2048;     // red
+		data[i*4 + 1] = 100;//info1[y][x].volatilityAvg60;//*255/2048; // green
+		data[i*4 + 2] = 0;//info1[y][x].volatilityAvg60;//*;;255/2048; // blue
+		data[i*4 + 3] = 255;//-depth[y][x]*255/2048; // alpha
+	}
+
+	myImageData.data = data;
+	//console.log("data2",data)
+	ctx.putImageData(myImageData, 0, 0);
+	//draw skeleton data on there in circles
+
+	for(var i = 0; i < skeleton.length; i++){
+		if(skeleton[i].w == 1){
+			console.log("w equals one",skeleton[i]);
+			ctx.beginPath();
+			ctx.arc(skeleton[i].x, skeleton[i].y,10,0,2*Math.PI,false);
+			ctx.fillStyle = "red";
+			ctx.fill();
+		}
+	}
+	ctx.beginPath();
+	ctx.arc(counter,20,10,0,2*Math.PI,false);
+	ctx.fillStyle = "blue";
+	ctx.fill();
+}
+
+
+var processedData = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+var mockdata = [[40829,40803,37989,44636],[41330,40800,36928,43069],[38225,44630,34087,43557]];
+
+function updateData(data){
+	//MAXTODO: consider the architecture of this program.... passing in this parameter that mirrors a global item to edit that same globalitem? idk
+	processedData = data;
+//	processedData = mockdata;
+}
+var count;
+function startup () {
+	console.log ("startup");
+	//self.setInterval (everySecond, 30);
+//	console.log (THREE.Vector2(0,0),"v4v4v4v4v4");
+	//self.setInterval (everySecond, 1000);
+	var mySocket = new WebSocket (urlMySocket);
+
+	mySocket.onopen = function (evt) {
+		console.log("opened socket");
+	};
+
+	mySocket.onmessage = function (evt) {
+		var message = JSON.parse(evt.data);
+		console.log("recieved message", message);
+		message = message.data;
+		updateData(message);
+		count = message.count;
+		createImage(myDepth, processedData, message.count);
+	};
+
+	init();
+	animate();
+}
+
+var scene, camera, renderer, clock;
+var startTime = Date.now();
+var mouse = new THREE.Vector2();
+var initialZoom;
+var bufferScene; //= new THREE.Scene();
+var bufferTextureA;
+var bufferTextureB;
+//TODO: I forgot about textures in my analysis of how much data is allowed to be passed to shaders
+// how much room do textures take up? how does data location work via three.js abstraction?
+/*
+data0: {type:"3iv", value: [processedData[0].x,processedData[0].y,processedData[0].z]},
+data1: {type:"3iv", value: [processedData[1].x,processedData[1].y,processedData[1].z]},
+data2: {type:"3iv", value: [processedData[2].x,processedData[2].y,processedData[2].z]},
+data3: {type:"3iv", value: [processedData[3].x,processedData[3].y,processedData[3].z]},*/
+
+var uniforms =
+ {data0: {type:"4iv", value: processedData[0]},
+	data1: {type:"4iv", value: processedData[1]},
+	data2: {type:"4iv", value: processedData[2]},
+	data3: {type:"4iv", value: processedData[3]},
+	count: {type:"i", value:count},
+	time: {type:"f", value: 1.0 },
+	resolution: {type:"2f", value: new THREE.Vector2(window.innerWidth, window.innerHeight)},
+	texture1: { type: 't', value: bufferTextureA}
+};
+
+var counter = 1.0;
+var group;
+var mouseDown= false;
+var planeMesh2;
+function clamp(value, min, max) {
+	return Math.min(Math.max(value, min), max);
+}
+// Globals from the previous step go here...
+// Sets up the scene.
+function init() {
+	// Create the scene and set the scene size.
+	scene = new THREE.Scene();
+	var WIDTH = window.innerWidth,
+	HEIGHT = window.innerHeight;
+	var ambient = new THREE.AmbientLight( 0xffffff, 200. );
+	// Create a renderer and add it to the DOM.
+	renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+	renderer.setSize(WIDTH, HEIGHT);
+	renderer.setClearColor( 0x000000, 0);
+	document.body.appendChild(renderer.domElement);
+
+
+	// Set the background color of the scene.
+	// Create a camera, zoom it out from the model a bit, and add it to the scene.
+	var border = 0;
+	camera = new THREE.OrthographicCamera( WIDTH / - 2 - border, WIDTH / 2 + border, HEIGHT / 2 + border, HEIGHT / - 2 - border, -4000, 4000 );
+	camera.position.z = 10;
+	scene.add(camera);
+	initialZoom=camera.zoom;
+	scene.add(new THREE.AmbientLight(0xffffff));
+
+	// Create an event listener that resizes the renderer with the browser window.
+	window.addEventListener('resize', function() {
+		var WIDTH = window.innerWidth,
+		HEIGHT = window.innerHeight;
+		renderer.setSize(WIDTH, HEIGHT);
+		camera.aspect = WIDTH / HEIGHT;
+		camera.updateProjectionMatrix();
+	});
+	var material = new THREE.ShaderMaterial( {
+		uniforms: uniforms,
+ 		vertexShader: document.getElementById( 'vertexShader' ).textContent,
+		fragmentShader: document.getElementById( 'fragmentShader' ).textContent
+	});
+
+	material.side = THREE.DoubleSide;
+
+	geometry = new THREE.PlaneGeometry( window.innerWidth, window.innerHeight );
+	var material2 = new THREE.MeshBasicMaterial( {color: 0x00ff00} );
+
+	var mesh = new THREE.Mesh(geometry, material);
+	mesh.position.z = -10;
+	scene.add(mesh);
+}
+function animate() {
+	var swap = bufferTextureA;
+	bufferTextureA = bufferTextureB;
+	bufferTextureB = swap;
+
+	// Read more about requestAnimationFrame at http://www.paulirish.com/2011/requestanimationframe-for-smart-animating/
+	requestAnimationFrame(animate);
+	counter++;
+	uniforms.time.value = counter;
+	uniforms.resolution.value = new THREE.Vector2(window.innerWidth,window.innerHeight);
+  uniforms.texture1.value = bufferTextureA;
+	uniforms.data0.value =processedData[0];
+	uniforms.data1.value =processedData[1];
+	uniforms.data2.value =processedData[2];
+	uniforms.data3.value =processedData[3];
+
+	// Render the scene.
+	render();
+}
+function render() {
+	renderer.render( scene, camera );
+}
+// ]]>
+
+
+$(window).load (function () {
+	startup ();
+});
+
+</script>
+</body>
+</html>
